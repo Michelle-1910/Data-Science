@@ -1,0 +1,127 @@
+-- File: cw_db.sql
+-- Date: 02/03/2020
+-- Purpose: Database designing for module coursework
+-- Author: Michelle Namuyaba
+-- Address: Birkbeck, University of London
+-- Malet St, Bloomsbury, London WC1E 7HX
+-- Department of Biological Sciences
+-- Course: Msc Bioinformatics with Systems Biology
+-- Module: Data Science
+-- Module coordinator: Dr. Adrian Shepherd
+-- Description:
+-- This is an sql script written to design a database to manage selected data from an environment risk
+assessment concerning growth of fungi within buildings, such as heritage buildings owned by the
+national trust.
+
+-- TABLE CREATION
+-- Starting with DROPS TABLE IF EXISTS avoids dropping of tables manually as I run the script for
+subsequent table generation.
+DROP TABLE IF EXISTS buildings;
+DROP TABLE IF EXISTS rooms;
+DROP TABLE IF EXISTS e_measure;
+DROP TABLE IF EXISTS fungal_sample;
+
+CREATE TABLE fungal_sample
+( sample_id CHAR(6) NOT NULL,
+ genus VARCHAR(15) NOT NULL,
+ species VARCHAR(15) DEFAULT 'undocumented',
+ PRIMARY KEY (sample_id)
+)ENGINE=InnoDB;
+
+CREATE TABLE e_measure
+( emeasure_id CHAR(6) NOT NULL,
+ sample_id CHAR(6) NOT NULL,
+ temp FLOAT NOT NULL,
+ r_humidity FLOAT NOT NULL,
+ coll_date DATE NOT NULL,
+ coll_time TIME NOT NULL,
+ PRIMARY KEY (emeasure_id),
+ FOREIGN KEY (sample_id) REFERENCES fungal_sample(sample_id) ON DELETE CASCADE
+)ENGINE=InnoDB;
+
+CREATE TABLE rooms
+( room_id CHAR(5) NOT NULL,
+ emeasure_id CHAR(6) NOT NULL,
+ room_type VARCHAR(15) NOT NULL,
+ floor_space FLOAT NOT NULL,
+ window_count INTEGER NOT NULL,
+ room_aspect VARCHAR(15) NOT NULL,
+ PRIMARY KEY (room_id),
+ FOREIGN KEY (emeasure_id) REFERENCES e_measure(emeasure_id) ON DELETE CASCADE
+)ENGINE=InnoDB;
+
+CREATE TABLE buildings
+( building_id CHAR(5) NOT NULL,
+ room_id CHAR(5) NOT NULL,
+ emeasure_id CHAR(6) NOT NULL,
+ building_nameVARCHAR(15) NOT NULL,
+ grid_ref CHAR(8) NOT NULL,
+ building_mt VARCHAR(10) NOT NULL,
+ PRIMARY KEY (building_id),
+ FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE,
+ FOREIGN KEY (emeasure_id) REFERENCES e_measure(emeasure_id) ON DELETE CASCADE
+)ENGINE=InnoDB;
+
+
+-- DESCRIPTION OF THE DATABASE APPLICATION
+-- 1. INSERTING DUMMY DATA (Bulk loading data)
+INSERT INTO fungal_sample VALUES
+ ('fs001a', 'penecillium', 'citrinum'),
+ ('fs005e', 'armillaria', 'mellea'),
+ ('fs004c', 'penecillium', 'expansum'),
+ ('fs002d','aspergillus','flavus');
+INSERT INTO fungal_sample(sample_id, genus) VALUES
+ ('fs001b', 'cladosporium'),
+ ('fs003a', 'agaricus');
+INSERT INTO e_measure VALUES
+ ('em001a', 'fs001a', '14.7', '68.2', '2020-02-02', '23:20:01'),
+ ('em005e','fs005e','8.4', '71.3', '2020-02-19', '20:16:08'),
+ ('em004c', 'fs004c','16.3', '60.4', '2020-02-10', '13:08:29'),
+ ('em002d', 'fs002d','10.2', '50.7', '2020-02-11', '13:08:06'),
+ ('em001b', 'fs001b','11.5', '59.2', '2020-02-05', '11:30:02'),
+ ('em003a', 'fs003a','15.6', '70.3', '2020-02-02', '14:15:03');
+INSERT INTO rooms VALUES
+ ('r001a', 'em001a','gallery', '14.7', '4', 'northfacing'),
+ ('r005e', 'em005e','library', '16.8', '3', 'southfacing'),
+ ('r004c', 'em004c','gallery', '20.8', '8', 'eastfacing'),
+ ('r002d', 'em002d','hallway', '15.8', '2', 'westfacing'),
+ ('r001b', 'em001b','wine cellar', '8', '5', 'northfacing'),
+ ('r003a', 'em003a','wine cellar', '40.9', '3', 'eastfacing');
+INSERT INTO buildings VALUES
+ ('b001a', 'r001a', 'em001a','lyme hall', 'brick', 'nn166712'),
+ ('b005e', 'r005e', 'em005e','anglesey abbey', 'sandstone', 'ns145712'),
+ ('b004c', 'r004c', 'em004c','bath hall', 'basalt', 'sw199610'),
+ ('b002d', 'r002d', 'em002d','clandon hall', 'quartzite', 'se218892'),
+ ('b001b', 'r001b', 'em001b','oxburgh hall', 'basalt', 'nw319196'),
+ ('b003a', 'r003a', 'em003a','lyme hall', 'brick', 'nn166712');
+ 
+-- INDEXING
+CREATE INDEX genus_ix ON fungal_sample(genus(6));
+CREATE INDEX species_ix ON fungal_sample(species(6));
+CREATE INDEX sampleid_ix ON e_measure(sample_id(6));
+CREATE INDEX roomaspect_ix ON rooms(room_aspect(6));
+CREATE INDEX emeasureid_ix ON rooms(emeasure_id(6));
+
+-- DENORMALIZATION
+ALTER TABLE rooms ADD temp FLOAT NOT NULL;
+ALTER TABLE rooms ADD r_humidity FLOAT NOT NULL;
+INSERT INTO rooms(temp, r_humidity) VALUES
+ ('14.7', '4'),
+ ('16.8', '3'),
+ ('20.8', '8'),
+ ('15.8', '2'),
+ ('8', '5'),
+ ('40.9', '3');
+ 
+-- SPECIFIC DATABASE QUERIES
+-- 1. SELECT COUNT(building_id) FROM rooms, buildings WHERE room_type = 'library' AND
+rooms.room_id = buildings.room_id;
+-- 2. SELECT room_type, COUNT(*) FROM rooms GROUP BY room_type ORDER BY COUNT(*) DESC;
+-- 3. SELECT AVG(r_humidity) FROM e_measure, fungal_sample WHERE genus = 'aspergillus' AND
+e_measure.sample_id = fungal_sample.sample_id;
+-- 4. SELECT COUNT(species) FROM fungal_sample, rooms, e_measure WHERE room_type =
+'kitchen' AND room_aspect = 'southfacing' AND rooms.emeasure_id = e_measure.emeasure_id AND
+e_measure.sample_id = fungal_sample.sample_id ORDER BY COUNT(species) DESC LIMIT 10;
+-- 5. SELECT room_type, COUNT(fungal_sample.sample_id) FROM rooms, fungal_sample, e_measure
+WHERE rooms.emeasure_id = e_measure.emeasure_id AND e_measure.sample_id =
+fungal_sample.sample_id GROUP BY room_type ORDER BY COUNT(*) DESC;
